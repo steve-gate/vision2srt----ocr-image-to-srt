@@ -767,7 +767,7 @@ export default function App() {
                   }`}
                 >
                   <ImageIcon size={16} />
-                  <span className="text-xs">Tự động lọc nền</span>
+                  <span className="text-xs">Lọc nền (Chữ đen/Trắng)</span>
                 </button>
 
                 <button 
