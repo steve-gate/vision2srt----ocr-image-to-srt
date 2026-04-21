@@ -13,7 +13,12 @@ export interface ExtractedText {
   boundingBoxes?: BoundingBox[];
 }
 
-export async function extractTextFromImage(base64Image: string, mimeType: string, deepScan: boolean = false): Promise<ExtractedText> {
+export async function extractTextFromImage(
+  base64Image: string, 
+  mimeType: string, 
+  deepScan: boolean = false,
+  language: string = "Vietnamese"
+): Promise<ExtractedText> {
   let retries = 0;
   const maxRetries = 3;
   const baseDelay = 1000;
@@ -21,8 +26,8 @@ export async function extractTextFromImage(base64Image: string, mimeType: string
   while (retries <= maxRetries) {
     try {
       const prompt = deepScan 
-        ? "You are an advanced OCR engine specialized in subtitles. " +
-          "Extract every piece of text from this image accurately, preserving punctuation and Vietnamese diacritics. " +
+        ? `You are an advanced OCR engine specialized in subtitles. The expected language is ${language}. ` +
+          "Extract every piece of text from this image accurately, preserving punctuation and specific characters of this language. " +
           "If there are multiple blocks, sort them logically (top to bottom). " +
           "Output ONLY a pure JSON object without markdown code blocks. " +
           "Structure:\n" +
@@ -31,7 +36,7 @@ export async function extractTextFromImage(base64Image: string, mimeType: string
           "  \"confidence\": 0-100,\n" +
           "  \"boundingBoxes\": [{ \"box_2d\": [ymin, xmin, ymax, xmax], \"label\": \"text portion\" }]\n" +
           "}"
-        : "Extract all visible text from this image. Focus on accuracy and Vietnamese characters. " +
+        : `Extract all visible text from this image. Expected language: ${language}. Focus on accuracy and specific characters. ` +
           "Output ONLY a JSON object. Structure: { \"text\": \"...\", \"confidence\": 0-100, \"boundingBoxes\": [{ \"box_2d\": [ymin, xmin, ymax, xmax], \"label\": \"...\" }] }";
 
       const response = await ai.models.generateContent({

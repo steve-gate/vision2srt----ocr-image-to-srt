@@ -32,6 +32,7 @@ export interface ProjectSettings {
   isAutoClean: boolean;
   isDeepScan: boolean;
   minConfidence: number;
+  ocrLanguage: string;
   lastUpdated: number;
   itemCount: number;
 }

@@ -19,7 +19,8 @@ import {
   PlusCircle,
   History,
   MoreVertical,
-  Edit2
+  Edit2,
+  Languages
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { extractTextFromImage, BoundingBox } from './services/ocrService';
@@ -28,6 +29,17 @@ import { db, type StoredSubtitleItem, type ProjectSettings } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 const DEFAULT_PROJECT_ID = 'default-project';
+
+const OCR_LANGUAGES = [
+  { code: 'Vietnamese', name: 'Tiếng Việt' },
+  { code: 'English', name: 'Tiếng Anh' },
+  { code: 'Chinese', name: 'Tiếng Trung' },
+  { code: 'Japanese', name: 'Tiếng Nhật' },
+  { code: 'Korean', name: 'Tiếng Hàn' },
+  { code: 'French', name: 'Tiếng Pháp' },
+  { code: 'German', name: 'Tiếng Đức' },
+  { code: 'Spanish', name: 'Tiếng Tây Ban Nha' },
+];
 
 interface SubtitleItem {
   id: string;
@@ -83,6 +95,7 @@ export default function App() {
   const [isAutoClean, setIsAutoClean] = useState(false);
   const [isDeepScan, setIsDeepScan] = useState(false);
   const [minConfidence, setMinConfidence] = useState(70);
+  const [ocrLanguage, setOcrLanguage] = useState('Vietnamese');
   const [filterMode, setFilterMode] = useState<'all' | 'needs-attention'>('all');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
@@ -131,10 +144,12 @@ export default function App() {
           setIsAutoClean(storedProject.isAutoClean);
           setIsDeepScan(storedProject.isDeepScan);
           setMinConfidence(storedProject.minConfidence);
+          if (storedProject.ocrLanguage) setOcrLanguage(storedProject.ocrLanguage);
         } else {
           // New project defaults
           setProjectName('Dự án mới');
           setBaseDuration(5);
+          setOcrLanguage('Vietnamese');
         }
 
         const storedSubtitles = await db.subtitles
@@ -200,10 +215,11 @@ export default function App() {
       isAutoClean,
       isDeepScan,
       minConfidence,
+      ocrLanguage,
       lastUpdated: Date.now(),
       itemCount: subtitles.length
     });
-  }, [projectName, baseDuration, useFilenameTimestamps, isAutoClean, isDeepScan, minConfidence, subtitles.length, isRestored, currentProjectId]);
+  }, [projectName, baseDuration, useFilenameTimestamps, isAutoClean, isDeepScan, minConfidence, ocrLanguage, subtitles.length, isRestored, currentProjectId]);
 
   // Auto-save Subtitles
   useEffect(() => {
@@ -536,7 +552,7 @@ export default function App() {
           reader.readAsDataURL(item.file);
         });
 
-        const result = await extractTextFromImage(base64, item.file.type, isDeepScan);
+        const result = await extractTextFromImage(base64, item.file.type, isDeepScan, ocrLanguage);
         setSubtitles(prev => prev.map(s => s.id === item.id ? { 
           ...s, 
           text: result.text, 
@@ -570,7 +586,7 @@ export default function App() {
         reader.readAsDataURL(item.file);
       });
 
-      const result = await extractTextFromImage(base64, item.file.type, isDeepScan);
+      const result = await extractTextFromImage(base64, item.file.type, isDeepScan, ocrLanguage);
       setSubtitles(prev => prev.map(s => s.id === id ? { 
         ...s, 
         text: result.text, 
@@ -781,6 +797,19 @@ export default function App() {
                   <FileText size={16} />
                   <span className="text-xs text-nowrap">TG từ tên file</span>
                 </button>
+
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm grow md:grow-0">
+                  <Languages size={16} className="text-slate-400" />
+                  <select 
+                    value={ocrLanguage}
+                    onChange={(e) => setOcrLanguage(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                  >
+                    {OCR_LANGUAGES.map(lang => (
+                      <option key={lang.code} value={lang.code}>{lang.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
