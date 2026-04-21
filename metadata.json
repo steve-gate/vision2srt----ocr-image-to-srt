@@ -1,6 +1,5 @@
 {
-  "name": "Vision2SRT -  OCR image to srt",
+  "name": "Vision2SRT - OCR Image to SRT",
   "description": "Convert images containing text into SRT subtitle files using AI-powered OCR.",
-  "requestFramePermissions": [],
-  "majorCapabilities": []
+  "requestFramePermissions": []
 }

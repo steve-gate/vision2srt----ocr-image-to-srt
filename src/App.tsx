@@ -783,7 +783,7 @@ export default function App() {
                   }`}
                 >
                   <ImageIcon size={16} />
-                  <span className="text-xs">Lọc nền (Chữ đen/Trắng)</span>
+                  <span className="text-xs">Xóa nền (Chỉ để lại chữ)</span>
                 </button>
 
                 <button 

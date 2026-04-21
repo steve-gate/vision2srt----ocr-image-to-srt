@@ -29,23 +29,20 @@ export async function processImageToBW(file: File): Promise<{ blob: Blob; url: s
       const imageData = ctx.getImageData(0, 0, width, height);
       const data = imageData.data;
 
-      // 1. Convert to grayscale and apply contrast stretching
+      // 1. Convert to grayscale and apply aggressive contrast enhancement
+      const grays = new Uint8Array(data.length / 4);
       let min = 255;
       let max = 0;
-      const grays = new Uint8Array(data.length / 4);
 
       for (let i = 0; i < data.length; i += 4) {
+        // Luminance conversion
         const grayscale = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
         grays[i / 4] = grayscale;
         if (grayscale < min) min = grayscale;
         if (grayscale > max) max = grayscale;
       }
 
-      // Avoid division by zero
-      const range = max - min || 1;
-
       // 2. Adaptive Thresholding (Bradley-Roth using Integral Image)
-      // This is far superior for OCR as it handles uneven lighting/shading
       const integral = new Float64Array(width * height);
       for (let y = 0; y < height; y++) {
         let sum = 0;
@@ -60,16 +57,23 @@ export async function processImageToBW(file: File): Promise<{ blob: Blob; url: s
         }
       }
 
-      const s = Math.floor(width / 8); // Window size
-      const t = 15; // Threshold percentage (adjustable)
+      const s = Math.floor(width / 32); // Smaller window for better local detail
+      const t = 18; // Slightly more aggressive threshold
 
-      // Determine if image is mostly dark (bright text on dark bg) or bright (dark text on light bg)
-      // This heuristic helps us decide whether to invert the adaptive result to get Black-on-White
+      // Better detection: count highlights and midtones in the bottom half where subtitles usually are
       let darkPixels = 0;
-      for (let i = 0; i < grays.length; i++) {
-        if (grays[i] < 127) darkPixels++;
+      const bottomStart = Math.floor(height * 0.6);
+      let totalBottomPixels = 0;
+      for (let y = bottomStart; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          totalBottomPixels++;
+          if (grays[y * width + x] < 127) darkPixels++;
+        }
       }
-      const isMostlyDark = darkPixels > (grays.length / 2);
+      const isMostlyDark = darkPixels > (totalBottomPixels * 0.6);
+
+      // Create a temporary buffer for thresholded results
+      const thresholded = new Uint8Array(width * height);
 
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -87,30 +91,49 @@ export async function processImageToBW(file: File): Promise<{ blob: Blob; url: s
 
           const gray = grays[idx];
           
-          // Adaptive logic: value is white if it's much brighter than local mean, else black
-          // But we want it consistent: Black text on White background.
-          // We apply the same inversion logic as before but locally.
-          
-          let isBlack;
-          if (gray * count < sum * (100 - t) / 100) {
-            isBlack = true; // Local dark -> text (if dark on bright)
-          } else {
-            isBlack = false; // Local bright -> bg
-          }
-
-          // Heuristic to maintain "Black Text on White BG"
-          // If the original image was mostly dark, we invert the result
-          let finalValue = isBlack ? 0 : 255;
+          let isForeground;
           if (isMostlyDark) {
-            finalValue = isBlack ? 255 : 0;
+            // Bright text on dark bg
+            isForeground = gray * count > sum * (100 + t) / 100;
+          } else {
+            // Dark text on bright bg
+            isForeground = gray * count < sum * (100 - t) / 100;
           }
 
-          const targetIdx = idx * 4;
-          data[targetIdx] = finalValue;
-          data[targetIdx + 1] = finalValue;
-          data[targetIdx + 2] = finalValue;
-          data[targetIdx + 3] = 255;
+          thresholded[idx] = isForeground ? 0 : 255;
         }
+      }
+
+      // 3. Noise reduction - Despeckle pass (remove isolated pixels)
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          if (thresholded[idx] === 0) { // Black pixel
+            // If surrounded by white, it might be noise
+            let whiteNeighbors = 0;
+            if (thresholded[idx - 1] === 255) whiteNeighbors++;
+            if (thresholded[idx + 1] === 255) whiteNeighbors++;
+            if (thresholded[idx - width] === 255) whiteNeighbors++;
+            if (thresholded[idx + width] === 255) whiteNeighbors++;
+            
+            if (whiteNeighbors >= 4) {
+              thresholded[idx] = 255; // Clean it up to white
+            }
+          }
+        }
+      }
+
+      // Apply result back to original image data
+      for (let i = 0; i < thresholded.length; i++) {
+        const val = thresholded[i];
+        const targetIdx = i * 4;
+        
+        // If val is 0 (Black/Foreground), set as Solid Black
+        // If val is 255 (White/Background), set as Transparent
+        data[targetIdx] = 0;
+        data[targetIdx + 1] = 0;
+        data[targetIdx + 2] = 0;
+        data[targetIdx + 3] = val === 0 ? 255 : 0;
       }
 
       ctx.putImageData(imageData, 0, 0);
